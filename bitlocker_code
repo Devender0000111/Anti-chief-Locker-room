@@ -1,0 +1,75 @@
+ORG 0000H MOV P1, #0H
+MOV P2, #0H
+SETB P3.4 ; Counter 0 input
+SETB P1.1 ; Input for keypad 1
+SETB P1.2 ; Input for keypad 2
+SETB P1.3 ; Input for keypad 3
+MOV TMOD, #00100110B ; Setting timer 1 to mode 2 and timer 0 to
+;mode 2, counter
+MOV TH0, #0H
+MOV TH1, #-3 ; Baud rate 9600
+MOV SCON, #50H ; SCON to mode 1
+SETB TR0 SETB TR1
+ALP CODE
+MOV DPTR, #200H ; Moving data pointer to 200H
+MOV R0, #09
+HERE: JB P1.0, SKIP ; Jump to message if room is full
+MOV A, TL0
+CJNE A, #3, HERE ; Check if room is full
+SETB P1.0 ; If room full, turn on LED at P1.0
+SJMP HERE
+SKIP: ACALL FULL
+FULL: NOP
+AGAIN: CLR A
+MOVC A, @A + DPTR ; Traverse message and move to serial buffer
+ACALL TRANS
+INC DPTR
+DJNZ R0, AGAIN
+SJMP NEXT
+NEXT: MOV R1, #3 ; Set number of attempts to 3
+MOV R2, #3
+MOV R3, #3
+TRY1: JB P1.1, ONE_OK ; If keypad 1 has correct value
+JNB P1.1, ONE_NOT_OK ; If keypad 1 has incorrect value
+TRY2: JB P1.2, TWO_OK ; If keypad 2 has correct value
+JNB P1.2, TWO_NOT_OK ; If keypad 2 has incorrect value
+TRY3: JB P1.3, THREE_OK ; If keypad 3 has correct value
+JNB P1.3, THREE_NOT_OK ; If keypad 3 has incorrect value
+ONE_OK: SETB P2.2 ; LED for keypad 1 open
+SJMP TRY2
+ONE_NOT_OK: DJNZ R1, TRY1
+SETB P2.1
+ACALL ALARM
+SJMP OVER
+TWO_OK: SETB P2.3 ; LED for keypad 2 open
+SJMP TRY3
+TWO_NOT_OK: DJNZ R2, TRY2
+SETB P2.1
+ACALL ALARM
+SJMP OVER
+THREE_OK: SETB P2.4 ; LED for keypad 3 open
+SJMP OVER
+THREE_NOT_OK: DJNZ R3, TRY3
+SETB P2.1 ; LED for alarm
+ACALL ALARM ; Move alarm message to serial buffer
+SJMP OVER
+ALARM: MOV DPTR, #210H ; Traverse the alarm message and move to serial buffer
+SETB P2.5 ; Activate door lock
+MOV R0, #6
+AGAIN2: CLR A
+MOVC A, @A + DPTR
+ACALL TRANS
+INC DPTR
+DJNZ R0, AGAIN2
+SJMP OVER
+TRANS: MOV SBUF, A ; Move value in ACC to SBUF
+WAIT: JNB TI, WAIT
+CLR TI
+RET
+OVER: NOP
+H: SJMP H
+ORG 0200H
+DB "ROOM FULL"
+ORG 0210H
+DB "ALARM!"
+END
